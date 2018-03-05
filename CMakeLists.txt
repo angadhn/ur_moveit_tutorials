@@ -15,6 +15,7 @@ find_package(catkin REQUIRED
     moveit_core
     moveit_ros_planning
     moveit_ros_planning_interface
+    robotiq_c_model_control
     pluginlib
     geometric_shapes
     moveit_visual_tools
@@ -41,6 +42,12 @@ link_directories(${catkin_LIBRARY_DIRS})
 
 add_executable(move_group_interface_tutorial src/move_group_interface_tutorial.cpp)
 target_link_libraries(move_group_interface_tutorial ${catkin_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(box_grabber src/box_grabber.cpp)
+target_link_libraries(box_grabber ${catkin_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(calibrate src/wrist_cam_calibrate.cpp)
+target_link_libraries(calibrate ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}

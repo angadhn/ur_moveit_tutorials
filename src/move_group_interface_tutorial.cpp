@@ -1,7 +1,7 @@
 //
 // Created by y3rs tr00ly and Pete Blacker on 13/12/17.
 //
-
+#include <tf2/LinearMath/Transform.h>
 #include <ros/ros.h>/* ros/ros.h is a convenience include that
 		       includes all the headers necessary to use
 		       the most common public pieces of the ROS system.
@@ -15,35 +15,114 @@
 #include <moveit_msgs/AttachedCollisionObject.h>
 #include <moveit_msgs/CollisionObject.h>
 #include <moveit_visual_tools/moveit_visual_tools.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
+
+//#include <robotiq_c_model_control/CModel_robot_output.h>
 
 using namespace std;
 
 ros::Publisher *pose_pub_ptr;
 ros::Publisher *debug_pose_pub_ptr;
-ros::Subscriber *pose_sub_ptr;
+//ros::Subscriber *pose_sub_ptr;
 moveit::planning_interface::MoveGroupInterface *move_group_ptr;
+geometry_msgs::PoseStamped lastPose;
+geometry_msgs::PoseStamped endEffectorTargetPose;
 
-void desPosCallback(const geometry_msgs::PoseStamped::ConstPtr& markerPose){
-    //markerPose.pose.position.x += 0.1;
+void desPosCallback(const geometry_msgs::PoseStamped::ConstPtr& markerPose)
+{
     debug_pose_pub_ptr->publish(markerPose);
+    lastPose = *markerPose;
+    tf2::Transform relativeToMarker;
+
+    relativeToMarker.setOrigin(tf2::Vector3(0,0,0.28));
+    relativeToMarker.setRotation(tf2::Quaternion(tf2::Vector3(0,1,0), 1.5707));
+
+    tf2::Transform markerPose2;
+    markerPose2.setOrigin(tf2::Vector3(lastPose.pose.position.x,
+				      lastPose.pose.position.y,
+				      lastPose.pose.position.z));
+    markerPose2.setRotation(tf2::Quaternion(lastPose.pose.orientation.x,
+			   lastPose.pose.orientation.y,
+			   lastPose.pose.orientation.z,
+			   lastPose.pose.orientation.w));
+
+    markerPose2 = markerPose2 * relativeToMarker;
+
+    //geometry_msgs::PoseStamped target_pose;
+    endEffectorTargetPose.header.frame_id=lastPose.header.frame_id;
+    endEffectorTargetPose.header.stamp=ros::Time::now();
+    endEffectorTargetPose.pose.orientation.x = markerPose2.getRotation()[0];
+    endEffectorTargetPose.pose.orientation.y = markerPose2.getRotation()[1];
+    endEffectorTargetPose.pose.orientation.z = markerPose2.getRotation()[2];
+    endEffectorTargetPose.pose.orientation.w = markerPose2.getRotation()[3];
+    endEffectorTargetPose.pose.position.x = markerPose2.getOrigin()[0];
+    endEffectorTargetPose.pose.position.y = markerPose2.getOrigin()[1];
+    endEffectorTargetPose.pose.position.z = markerPose2.getOrigin()[2];
+
+    pose_pub_ptr->publish(endEffectorTargetPose);
 }
 
-void moveArm(){
+void planCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& nothing)
+{
+    ROS_INFO("Preveiwing plan to target");
+
+    move_group_ptr->setMaxVelocityScalingFactor(.025);
+    move_group_ptr->setPoseTarget(endEffectorTargetPose);
+
+    moveit::planning_interface::MoveGroupInterface::Plan tempPlan;
+    move_group_ptr->plan(tempPlan);
+}
+
+
+void goalCallback(const geometry_msgs::PoseStamped::ConstPtr& markerPose)
+{
     // Getting basic information
     // ^^^^^^^^^^^^^^^^^^^^^^^^^
     //
     // We can print the name of the reference frame for this robot.
-    ROS_ERROR("Planning reference frame: %s", move_group_ptr->getPlanningFrame().c_str());
-    ROS_ERROR("End effector reference frame: %s", move_group_ptr->getEndEffectorLink().c_str());
+    ROS_INFO("Planning reference frame: %s", move_group_ptr->getPlanningFrame().c_str());
+    ROS_INFO("End effector reference frame: %s", move_group_ptr->getEndEffectorLink().c_str());
     
+    /*tf2::Transform relativeToMarker;
+
+    relativeToMarker.setOrigin(tf2::Vector3(0,0,0.4));
+    relativeToMarker.setRotation(tf2::Quaternion(tf2::Vector3(1,0,0),-1.5707)
+*
+tf2::Quaternion(tf2::Vector3(0,1,0), 1.5707));
+
+    tf2::Transform markerPose;
+    markerPose.setOrigin(tf2::Vector3(lastPose.pose.position.x,
+				      lastPose.pose.position.y,
+				      lastPose.pose.position.z));
+    markerPose.setRotation(tf2::Quaternion(lastPose.pose.orientation.x,
+			   lastPose.pose.orientation.y,
+			   lastPose.pose.orientation.z,
+			   lastPose.pose.orientation.w));
+
+    markerPose = markerPose * relativeToMarker;
+
+    geometry_msgs::PoseStamped target_pose;
+    target_pose.header.frame_id=lastPose.header.frame_id;
+    target_pose.header.stamp=ros::Time::now();
+    target_pose.pose.orientation.x = markerPose.getRotation().getAxis()[0];
+    target_pose.pose.orientation.y = markerPose.getRotation().getAxis()[1];
+    target_pose.pose.orientation.z = markerPose.getRotation().getAxis()[2];
+    target_pose.pose.orientation.w = markerPose.getRotation().getW();
+    target_pose.pose.position.x = markerPose.getOrigin()[0];
+    target_pose.pose.position.y = markerPose.getOrigin()[1];
+    target_pose.pose.position.z = markerPose.getOrigin()[2];*/
+
+    //pose_pub_ptr->publish(endEffectorTargetPose);
+
     //Planning to a pose goal
     // ^^^^^^^^^^^^^^^^^^^^^^^
     // We can plan a motion for this group to a desired pose for the
     // end-effector.
+/*
+
     geometry_msgs::PoseStamped target_pose;/* Initializing a variable to provide the
 					      final pose for the EE.*/
-
-
+/*
     target_pose.header.frame_id="base_link";
     target_pose.header.stamp=ros::Time::now();// + ros::Duration(2.1);
     target_pose.pose.orientation.w = 1.;
@@ -55,9 +134,10 @@ void moveArm(){
 
     pose_pub_ptr->publish(target_pose);
 
-
+*/
 
 //    moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+
 
 //    bool success = move_group.plan(my_plan);
 
@@ -76,6 +156,9 @@ void moveArm(){
 
     //if(success) {
     //    ROS_INFO_NAMED("Moving...");
+    move_group_ptr->setMaxVelocityScalingFactor(.025);
+    move_group_ptr->setPoseTarget(endEffectorTargetPose);// setting the target for move group
+
     move_group_ptr->move();
     //}
     //sleep(5);
@@ -107,14 +190,18 @@ int main(int argc, char **argv) {
     // Publish debugger pose which is offset by 10cm from the markerPose.
     ros::Publisher debug_pose_pub = node_handle.advertise<geometry_msgs::PoseStamped>("debug_pose", 1000);
     debug_pose_pub_ptr = &debug_pose_pub;
-
+    // Setup 2 Subscribers
+    // ^^^^^^^^^^^^^^^^^^^
     // Subscribe to the desired pose i.e. pose of QR code from visp.
     // As opposed to a publisher, a callback function is used.
     ros::Subscriber pose_sub = node_handle.subscribe("/visp_auto_tracker/object_position", 1000, desPosCallback);
-    pose_sub_ptr = &pose_sub;
+
+   ros::Subscriber goal_sub = node_handle.subscribe("/goal", 1000, goalCallback);
+   ros::Subscriber init_sub = node_handle.subscribe("/initialpose", 1000, planCallback);
 
     // Moveit
     moveit::planning_interface::MoveGroupInterface move_group("manipulator");
+    //move_group.setPlannerId("RRTConnectkConfigDefault");
     move_group_ptr = &move_group;
 
 //    moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
@@ -145,7 +232,7 @@ int main(int argc, char **argv) {
     ros::Rate r(1); // 1 hz
     while (ros::ok())
     {
-      moveArm();
+//     moveArm();
       r.sleep();
       ros::spinOnce();
     }
